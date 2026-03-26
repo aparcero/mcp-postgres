@@ -1,0 +1,8 @@
+.idea/
+/.codex
+/.env
+/.env.*
+!/.env.example
+/postgres-mcp
+/mcp-postgres
+/bin/mcp-postgres

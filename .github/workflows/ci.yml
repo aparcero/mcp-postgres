@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres_version: ["15", "16", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres_version }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install toolchain with mise
+        uses: jdx/mise-action@v2
+
+      - name: Check module tidiness
+        run: |
+          mise run tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Run format, unit, lint, vulnerability, and build checks
+        run: mise run check
+
+      - name: Run integration tests
+        env:
+          POSTGRES_INTEGRATION_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+        run: mise run test-integration

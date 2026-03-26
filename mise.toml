@@ -1,0 +1,77 @@
+[env]
+_.file = ".env"
+
+[tools]
+golang = "1.26"
+
+[tasks.build]
+description = "Build the mcp-postgres binary"
+run = "mkdir -p bin && go build -o bin/mcp-postgres ./cmd/mcp-postgres"
+
+[tasks.run]
+description = "Run the server in STDIO mode"
+run = "go run ./cmd/mcp-postgres"
+
+[tasks.test]
+description = "Run unit tests"
+run = "env -u POSTGRES_INTEGRATION_DSN go test -v ./..."
+
+[tasks.test-unit]
+description = "Run unit tests only"
+run = "env -u POSTGRES_INTEGRATION_DSN go test -short -v ./..."
+
+[tasks.test-integration]
+description = "Run PostgreSQL integration tests only"
+run = "go test ./internal/postgres -run 'Test.*Integration' -v"
+
+[tasks.integration-up]
+description = "Start local PostgreSQL for integration tests"
+run = "docker compose -f docker-compose.integration.yml up -d --wait"
+
+[tasks.integration-down]
+description = "Stop local PostgreSQL for integration tests"
+run = "docker compose -f docker-compose.integration.yml down -v"
+
+[tasks.test-integration-docker]
+description = "Run integration tests against disposable Docker PostgreSQL"
+run = """
+set -e
+docker compose -f docker-compose.integration.yml up -d --wait
+trap 'docker compose -f docker-compose.integration.yml down -v' EXIT
+POSTGRES_INTEGRATION_DSN='postgresql://postgres:postgres@127.0.0.1:55432/mcp_postgres_test?sslmode=disable' go test ./internal/postgres -run 'Test.*Integration' -count=1 -v
+"""
+
+[tasks.test-coverage]
+description = "Run unit tests with coverage"
+run = """
+env -u POSTGRES_INTEGRATION_DSN go test -coverprofile=coverage.out -covermode=atomic ./...
+go tool cover -html=coverage.out -o coverage.html
+"""
+
+[tasks.fmt]
+description = "Format Go sources"
+run = "find cmd internal -name '*.go' -type f -print0 | xargs -0 gofmt -w"
+
+[tasks.fmt-check]
+description = "Fail when Go sources are not formatted"
+run = "out=$(find cmd internal -name '*.go' -type f -print0 | xargs -0 gofmt -l); if [ -n \"$out\" ]; then echo \"$out\"; exit 1; fi"
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "go tool golangci-lint run ./..."
+
+[tasks.vulncheck]
+description = "Run govulncheck"
+run = "go tool govulncheck ./..."
+
+[tasks.tidy]
+description = "Tidy go.mod"
+run = "go mod tidy"
+
+[tasks.clean]
+description = "Clean build and coverage artifacts"
+run = "rm -rf mcp-postgres bin/mcp-postgres coverage.out coverage.html"
+
+[tasks.check]
+description = "Run format, test, lint, vulnerability, and build verification"
+run = "mise run fmt-check && mise run test && mise run lint && mise run vulncheck && mise run build"
